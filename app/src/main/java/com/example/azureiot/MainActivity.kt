@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.microsoft.azure.sdk.iot.device.*
 import com.microsoft.azure.sdk.iot.device.DeviceTwin.Property
 import com.microsoft.azure.sdk.iot.device.DeviceTwin.TwinPropertyCallBack
+import com.microsoft.azure.sdk.iot.device.transport.ExponentialBackoffWithJitter
 import io.reactivex.Completable
 import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.schedulers.Schedulers
@@ -93,42 +94,48 @@ class MainActivity : AppCompatActivity() {
                 IotHubConnectionStatusChangeCallbackLogger(),
                 Any()
             )
-            client?.open()
             val callback = MessageCallback()
             client?.setMessageCallback(callback, null)
+
+            client?.setRetryPolicy(ExponentialBackoffWithJitter(3, 100, 10 * 100, 100, true))
+
+            client?.open() // MARK: open before subscribe
+
+            Log.d(TAG,"After open")
 
             client?.subscribeToDeviceMethod(
                 SampleDeviceMethodCallback(),
                 applicationContext, DeviceMethodStatusCallBack(), null
             )
+            Log.d(TAG,"After subscribeToDeviceMethod")
 
-            // MARK: get twin data
-            try {
-                client?.startDeviceTwin(DeviceTwinStatusCallBack(), null, OnProperty(), null)
-                val onDesiredPropertyChange: Map<Property, com.microsoft.azure.sdk.iot.device.DeviceTwin.Pair<TwinPropertyCallBack, Any?>> =
-                    object :
-                        HashMap<Property, com.microsoft.azure.sdk.iot.device.DeviceTwin.Pair<TwinPropertyCallBack, Any?>>() {
-                        init {
-                            put(
-                                Property("location", null),
-                                com.microsoft.azure.sdk.iot.device.DeviceTwin.Pair<TwinPropertyCallBack, Any?>(
-                                    OnProperty(),
-                                    null
-                                )
-                            )
-                        }
-                    }
-
-                client?.subscribeToTwinDesiredProperties(onDesiredPropertyChange)
-//                client?.getDeviceTwin()
-                // FIXME: seems subscribe 2 times
-
-            } catch (e: java.lang.Exception) {
-                e.printStackTrace()
-                Log.d(TAG, "Eception: $e")
-            }
-
-            // MARK: report data with twin
+//            // MARK: get twin data
+//            try {
+//                client?.startDeviceTwin(DeviceTwinStatusCallBack(), null, OnProperty(), null)
+//                val onDesiredPropertyChange: Map<Property, com.microsoft.azure.sdk.iot.device.DeviceTwin.Pair<TwinPropertyCallBack, Any?>> =
+//                    object :
+//                        HashMap<Property, com.microsoft.azure.sdk.iot.device.DeviceTwin.Pair<TwinPropertyCallBack, Any?>>() {
+//                        init {
+//                            put(
+//                                Property("location", null),
+//                                com.microsoft.azure.sdk.iot.device.DeviceTwin.Pair<TwinPropertyCallBack, Any?>(
+//                                    OnProperty(),
+//                                    null
+//                                )
+//                            )
+//                        }
+//                    }
+//
+//                client?.subscribeToTwinDesiredProperties(onDesiredPropertyChange)
+////                client?.getDeviceTwin()
+//                // FIXME: seems subscribe 2 times
+//
+//            } catch (e: java.lang.Exception) {
+//                e.printStackTrace()
+//                Log.d(TAG, "Eception: $e")
+//            }
+//
+//            // MARK: report data with twin
 //            try {
 //                Log.d(TAG, "Update reported properties...")
 //                val ss = SimpleGpsCoordinate(30.0, 10.0)
@@ -141,8 +148,7 @@ class MainActivity : AppCompatActivity() {
 //                e.printStackTrace()
 //                Log.d(TAG, "Eception: $e")
 //            }
-            //
-
+//            //
         } catch (e: Exception) {
             Log.e(TAG, "Exception while opening IoTHub connection: $e")
             client?.closeNow()
